@@ -1,0 +1,152 @@
+---
+title: "R Notebook"
+output:
+  html_document:
+    df_print: paged
+  html_notebook: default
+  pdf_document: default
+---
+```{r}
+library(tidyverse) 
+library(ggcorrplot) 
+library(moments)
+```
+
+```{r}
+happy = read.csv('/Users/janvivora/Downloads/2019.csv')
+head(happy)
+```
+
+```{r}
+summary(happy)
+```
+
+```{r}
+str(happy)
+```
+
+```{r}
+sum(is.na(happy)) # To check missing values
+```
+
+Using the viridis package, we can create our own variable with a custom color scheme. This scheme will color countries with higher scores in yellow and lower scores in purple.
+```{r}
+v_color <- viridis::viridis(
+  n = nrow(happy))
+
+happy$color <- v_color[Matrix::invPerm(
+  p = order(
+    x = happy$Score))]
+```
+
+```{r}
+# Correlation Analysis
+pairs(
+  formula = Score ~ GDP.per.capita + Social.support +
+    Healthy.life.expectancy + Freedom.to.make.life.choices +
+    Generosity + Perceptions.of.corruption,
+  data = happy,
+  col = happy$color,
+  pch = 19)
+```
+We can see in the pairs() plots that Score seems to have a strong positive relationship with GDP, social support, and healthy life expectancy. The relationship appears to be slightly weaker between Score and freedom, and much weaker between the generosity and preceptions of corruption variables.
+
+```{r}
+# Multiple linear regression model with all parameters included.
+
+lm_happy <- lm(
+  formula = Score ~ GDP.per.capita + Social.support +
+    Healthy.life.expectancy + Freedom.to.make.life.choices +
+    Generosity + Perceptions.of.corruption,
+  data = happy)
+summary(lm_happy)
+```
+
+The R-squared and adjusted R-squared are close enough to 1 for us to conclude that this model is a good fit.
+
+```{r}
+options(scipen=-100, digits = 3)
+anova(lm_happy)
+```
+
+The ANOVA shows about the same output, with generosity having a p-value of 0.128 and perceptions of corruption having a p-value of 0.075.
+
+```{r}
+# Testing Multicollinearity for original model
+options(scipen=10, digits=3)
+vif <- round(car::vif(lm_happy),2)
+
+cat("VIF of Original model\n")
+cat("##########################\n\n")
+
+cat("GDP Per Capita: ", vif[1])
+cat("\nSocial Support: ", vif[2])
+cat("\nLife Expectancy: ", vif[3])
+cat("\nFreedom: ", vif[4])
+cat("\nGenerosity: ", vif[5])
+cat("\nPerceptions of Corruption: ", vif[6])
+
+paste0("R-squared: ", round(summary(lm_happy)$r.squared, 2))
+```
+
+```{r}
+# Updated model
+lm_new <- update(
+    object = lm_happy,
+    formula = Score ~ .  - Generosity - Healthy.life.expectancy - Perceptions.of.corruption)
+summary(lm_new)
+anova(lm_new, lm_happy)
+```
+
+
+```{r}
+cat("VIF of New model\n")
+cat("#################\n\n")
+vif_2 <- round(car::vif(lm_new), 2)
+cat("GDP Per Capita: ", vif_2[1])
+cat("\nSocial Support: ", vif_2[2])
+cat("\nFreedom: ", vif_2[3])
+```
+
+We can see that GDP was the most severe case of multicollinearity as evidenced by it's original VIF score of 4.12. To address this, we dropped the healthy life expectancy variable as it was one of two variables most highly correlated with GDP. The other variable, social support, was kept due to its removal significantly lowered our R-squared to ~0.71. Generosity and perceptions of corruption were also dropped because it's associated p-value and ANOVA report showed it had no significant effect on raising a country's overall happiness score.
+
+```{r}
+options(repr.plot.width = 14, repr.plot.height = 12)
+par(mfrow=c(2,2))
+h <- hist(x = lm_happy$residuals,xlab = "Residuals of Original Model",
+        ylab = "Count",main = "Histogram of Original Model's Residuals",
+        las = 1,ylim = c(0,65),col = heat.colors(8))
+
+text(x = h$mids,y = h$counts,labels = h$counts,adj = c(0.5,-0.5))
+
+h1 <- hist(x = lm_new$residuals,xlab = "Residuals of New Model",
+        ylab = "Count",main = "Histogram of New Model's Residuals",
+        las = 1,xlim = c(-3, 2),col = heat.colors(8))
+text(x = h1$mids,y = h1$counts,labels = h1$counts,adj = c(0.5,-0.5))
+```
+
+
+```{r}
+cat("##### Skewness of models #####\n\n")
+cat("Skewness of original model: ", round(skewness(lm_happy$residuals),3))
+cat("\nSkewness of new model: ", round(skewness(lm_new$residuals),3))
+```
+
+The updated model is slightly less skewed than the original.
+
+```{r}
+shapiro.test(lm_happy$residuals)
+shapiro.test(lm_new$residuals)
+```
+
+Both models' residuals are not normally distributed as neither have a p-value > 0.5.
+
+# Conclusion
+We can conclude that the GDP per capita has the biggest influence on a country's overall happiness. While money may not buy happiness per se, it can provide people with an improvement to their lives. GDP had a strong positive relationship with social support and healthy life expectancy. As a country starts producing more income, it is able to spend that extra cash on improvements in other areas that also have a dramatic influence on happiness; healthcare and social safety nets. Finally, freedom shows that countries operating as democracies where people have autonomy over themselves without too much overreach from large institutions live happier lives as well.
+
+
+
+
+
+
+
